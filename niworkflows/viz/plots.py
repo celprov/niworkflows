@@ -136,15 +136,36 @@ class fMRIPlot:
 
         for i, (name, kwargs) in enumerate(self.confounds.items()):
             tseries = kwargs.pop("values")
-            confoundplot(
-                tseries,
-                grid[grid_id],
-                tr=self.tr,
-                color=palette[i],
-                name=name,
-                **kwargs
-            )
-            grid_id += 1
+            tseries = np.array[tseries]
+            p = palette[i]
+            if name == 'DVARS':
+                # Plot DVARS and FD in the same plot
+                tseries = np.vstack(tseries,self.confounds['FD'].pop("values"))
+                names = list(name,'FD')
+                p = palette[i:i+1]
+            elif name == "a_comp_cor_01":
+                # Plot the 3 top principal components
+                tseries = np.vstack(tseries,self.confounds['a_comp_cor_02'].pop("values"))
+                tseries = np.vstack(tseries,self.confounds['a_comp_cor_03'].pop("values"))
+                names = list(name,'a_comp_cor_02','a_comp_cor_03')
+                p = palette[i:i+2]
+            elif name == "crown_01": 
+                # Plot the 3 top principal components
+                tseries = np.vstack(tseries,self.confounds['crown_02'].pop("values"))
+                tseries = np.vstack(tseries,self.confounds['crown_03'].pop("values"))
+                names = list(name,'crown_02','crown_03')
+                p = palette[i:i+2]
+
+            if name in ['GS','GSWM','GSCSF','DVARS','a_comp_cor_01','crown_01']:
+                confoundplot(
+                    tseries,
+                    grid[grid_id],
+                    tr=self.tr,
+                    color=p,
+                    name=names,
+                    **kwargs
+                )
+                grid_id += 1
 
         plot_carpet(
             self.func_file,
@@ -671,8 +692,7 @@ def confoundplot(
     if tr is None:
         notr = True
         tr = 1.0
-    ntsteps = len(tseries)
-    tseries = np.array(tseries)
+    ntsteps = tseries.shape[0]
 
     # Define nested GridSpec
     gs = mgs.GridSpecFromSubplotSpec(
@@ -697,30 +717,6 @@ def confoundplot(
     else:
         ax_ts.set_xticklabels([])
 
-    if name is not None:
-        if units is not None:
-            name += " [%s]" % units
-
-        ax_ts.annotate(
-            name,
-            xy=(0.0, 0.7),
-            xytext=(0, 0),
-            xycoords="axes fraction",
-            textcoords="offset points",
-            va="center",
-            ha="left",
-            color=color,
-            size=8,
-            bbox={
-                "boxstyle": "round",
-                "fc": "w",
-                "ec": "none",
-                "color": "none",
-                "lw": 0,
-                "alpha": 0.8,
-            },
-        )
-
     for side in ["top", "right"]:
         ax_ts.spines[side].set_color("none")
         ax_ts.spines[side].set_visible(False)
@@ -740,58 +736,84 @@ def confoundplot(
     ax_ts.set_yticks([])
     ax_ts.set_yticklabels([])
 
-    nonnan = tseries[~np.isnan(tseries)]
-    if nonnan.size > 0:
-        # Calculate Y limits
-        valrange = nonnan.max() - nonnan.min()
-        def_ylims = [nonnan.min() - 0.1 * valrange, nonnan.max() + 0.1 * valrange]
-        if ylims is not None:
-            if ylims[0] is not None:
-                def_ylims[0] = min([def_ylims[0], ylims[0]])
-            if ylims[1] is not None:
-                def_ylims[1] = max([def_ylims[1], ylims[1]])
+    if name is not None:
+        for i,n in enumerate(name):
+            if units is not None:
+                n += " [%s]" % units
 
-        # Add space for plot title and mean/SD annotation
-        def_ylims[0] -= 0.1 * (def_ylims[1] - def_ylims[0])
+            ax_ts.annotate(
+                n,
+                xy=(0.0, 0.7),
+                xytext=(0, 0),
+                xycoords="axes fraction",
+                textcoords="offset points",
+                va="center",
+                ha="left",
+                color=color[i],
+                size=8,
+                bbox={
+                    "boxstyle": "round",
+                    "fc": "w",
+                    "ec": "none",
+                    "color": "none",
+                    "lw": 0,
+                    "alpha": 0.8,
+                },
+            )
 
-        ax_ts.set_ylim(def_ylims)
+        nonnan = tseries[~np.isnan(tseries)]
+        nonnan = nonnan[i,:]
+        if nonnan.size > 0:
+            # Calculate Y limits
+            valrange = nonnan.max() - nonnan.min()
+            def_ylims = [nonnan.min() - 0.1 * valrange, nonnan.max() + 0.1 * valrange]
+            if ylims is not None:
+                if ylims[0] is not None:
+                    def_ylims[0] = min([def_ylims[0], ylims[0]])
+                if ylims[1] is not None:
+                    def_ylims[1] = max([def_ylims[1], ylims[1]])
 
-        # Annotate stats
-        maxv = nonnan.max()
-        mean = nonnan.mean()
-        stdv = nonnan.std()
-        p95 = np.percentile(nonnan, 95.0)
-    else:
-        maxv = 0
-        mean = 0
-        stdv = 0
-        p95 = 0
+            # Add space for plot title and mean/SD annotation
+            def_ylims[0] -= 0.1 * (def_ylims[1] - def_ylims[0])
 
-    stats_label = (
-        r"max: {max:.3f}{units} $\bullet$ mean: {mean:.3f}{units} "
-        r"$\bullet$ $\sigma$: {sigma:.3f}"
-    ).format(max=maxv, mean=mean, units=units or "", sigma=stdv)
-    ax_ts.annotate(
-        stats_label,
-        xy=(0.98, 0.7),
-        xycoords="axes fraction",
-        xytext=(0, 0),
-        textcoords="offset points",
-        va="center",
-        ha="right",
-        color=color,
-        size=4,
-        bbox={
-            "boxstyle": "round",
-            "fc": "w",
-            "ec": "none",
-            "color": "none",
-            "lw": 0,
-            "alpha": 0.8,
-        },
-    )
+            ax_ts.set_ylim(def_ylims)
 
-    # Annotate percentile 95
+            # Annotate stats
+            maxv = nonnan.max()
+            mean = nonnan.mean()
+            stdv = nonnan.std()
+            p95 = np.percentile(nonnan, 95.0)
+        else:
+            maxv = 0
+            mean = 0
+            stdv = 0
+            p95 = 0
+
+        stats_label = (
+            r"max: {max:.3f}{units} $\bullet$ mean: {mean:.3f}{units} "
+            r"$\bullet$ $\sigma$: {sigma:.3f}"
+        ).format(max=maxv, mean=mean, units=units or "", sigma=stdv)
+        ax_ts.annotate(
+            stats_label,
+            xy=(0.98, 0.7),
+            xycoords="axes fraction",
+            xytext=(0, 0),
+            textcoords="offset points",
+            va="center",
+            ha="right",
+            color=color,
+            size=4,
+            bbox={
+                "boxstyle": "round",
+                "fc": "w",
+                "ec": "none",
+                "color": "none",
+                "lw": 0,
+                "alpha": 0.8,
+            },
+        )
+
+    """# Annotate percentile 95
     ax_ts.plot((0, ntsteps - 1), [p95] * 2, linewidth=0.1, color="lightgray")
     ax_ts.annotate(
         "%.2f" % p95,
@@ -819,9 +841,9 @@ def confoundplot(
             ha="right",
             color="dimgray",
             size=3,
-        )
+        )"""
 
-    ax_ts.plot(tseries, color=color, linewidth=0.8)
+    ax_ts.plot(tseries.T, color=color, linewidth=0.8)
     ax_ts.set_xlim((0, ntsteps - 1))
 
     if gs_dist is not None:
