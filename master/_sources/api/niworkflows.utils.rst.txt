@@ -17,3 +17,5 @@ Submodules
    niworkflows.utils.images
    niworkflows.utils.misc
    niworkflows.utils.spaces
+   niworkflows.utils.testing
+   niworkflows.utils.timeseries
