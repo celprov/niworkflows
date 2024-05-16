@@ -89,11 +89,7 @@ class BinarySubtraction(SimpleInterface):
         data[np.bool_(nb.load(self.inputs.in_subtract).dataobj)] = False
 
         out_file = str((Path(runtime.cwd) / "subtracted_mask.nii.gz").absolute())
-        out_img = base_img.__class__(
-            data,
-            base_img.affine,
-            base_img.header
-        )
+        out_img = base_img.__class__(data, base_img.affine, base_img.header)
         out_img.set_data_dtype("uint8")
         out_img.to_filename(out_file)
         self._results["out_mask"] = out_file
@@ -115,3 +111,41 @@ def image_binary_dilation(in_mask, radius=2):
     from skimage.morphology import ball
 
     return ndi.binary_dilation(in_mask.astype(bool), ball(radius)).astype(int)
+
+
+class _AxisFlipInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True, desc="input image")
+    axis = traits.Enum(
+        0,
+        1,
+        2,
+        usedefault=True,
+        desc="axis along which to flip the data. By default the first axis.",
+    )
+
+
+class _AxisFlipOutputSpec(TraitedSpec):
+    out_file = File(exists=False, desc="flipped image")
+
+
+class AxisFlip(SimpleInterface):
+    """Flip neuroimaging data along a set axis. By default it performs a LR flip."""
+
+    input_spec = _AxisFlipInputSpec
+    output_spec = _AxisFlipOutputSpec
+
+    def _run_interface(self, runtime):
+        # Open image
+        img = nb.load(self.inputs.in_file)
+
+        # Get the data array
+        data = img.get_fdata()
+
+        # Flip the data along the left-right axis
+        data_flipped = np.flip(data, axis=2)
+
+        # Create a new nibabel image with the flipped data
+        img_flipped = nb.Nifti1Image(data_flipped, img.affine)
+
+        self._results["out_file"] = img_flipped
+        return runtime
